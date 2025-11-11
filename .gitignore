@@ -1,0 +1,15 @@
+# Zig build outputs
+zig-out/
+tmp-debug-build/
+.zig-cache/
+
+# Editor/IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Object files, temporary files
+*.o
+*~
