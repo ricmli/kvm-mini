@@ -2,7 +2,8 @@ const std = @import("std");
 const kvm_mini = @import("kvm_mini");
 
 pub fn main() !void {
-    const allocator = &std.heap.page_allocator;
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
 
     var k = try kvm_mini.Kvm.open(allocator);
     defer k.close() catch {};
@@ -20,6 +21,9 @@ pub fn main() !void {
 
     const vcpuFd = try vm.createVcpu(0);
     std.debug.print("Created VCPU with fd: {d}\n", .{vcpuFd});
+
+    const buf = try vm.allocateAndRegister(0, 0x1000, 1024 * 1024);
+    std.debug.print("Allocated and registered memory at address: 0x{x}, size : {}\n", .{ @intFromPtr(buf.ptr), buf.len });
 
     // vm.close() will close vcpus and vm fds; k.close() will close the /dev/kvm fd
 }
