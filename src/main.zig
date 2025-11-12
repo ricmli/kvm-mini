@@ -25,5 +25,20 @@ pub fn main() !void {
     const buf = try vm.allocateAndRegister(0, 0x1000, 1024 * 1024);
     std.debug.print("Allocated and registered memory at address: 0x{x}, size : {}\n", .{ @intFromPtr(buf.ptr), buf.len });
 
+    // Write a single HLT instruction at guest physical 0x1000
+    buf[0] = 0xF4; // HLT opcode
+
+    // Setup registers and segment state for the vCPU
+    try vm.setupState(vcpuFd, 0x1000, 0x2000);
+
+    // Run the vCPU (ioctl/mmap encapsulated by Vm.runVcpu)
+    const reason = try vm.runVcpu(&k, vcpuFd);
+
+    if (reason == kvm_mini.kvm.KVM_EXIT_HLT) {
+        std.debug.print("vCPU exited with HLT (reason={d}) - success\n", .{reason});
+    } else {
+        std.debug.print("vCPU exited with reason: {d}\n", .{reason});
+    }
+
     // vm.close() will close vcpus and vm fds; k.close() will close the /dev/kvm fd
 }
