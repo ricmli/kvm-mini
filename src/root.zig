@@ -103,11 +103,12 @@ pub const Vm = struct {
 
         sregs.cs.base = 0;
         sregs.cs.selector = 0;
+        sregs.cr0 = 0; // real mode
 
         _ = try ioctl(@intCast(vcpuFd), kvm.KVM_SET_SREGS, @intFromPtr(&sregs));
     }
 
-    pub fn runVcpu(_: *Vm, k: *Kvm, vcpuFd: u32) !u32 {
+    pub fn runVcpu(self: *Vm, k: *Kvm, vcpuFd: u32) !u32 {
         const mmap_size = try k.getVcpuMmapSize();
         const run_ptr = os.mmap(null, mmap_size, os.PROT.READ | os.PROT.WRITE, .{ .TYPE = .SHARED }, @intCast(vcpuFd), 0);
         if (run_ptr == @intFromPtr(std.c.MAP_FAILED)) {
@@ -116,21 +117,34 @@ pub const Vm = struct {
         defer _ = os.munmap(@ptrFromInt(run_ptr), mmap_size);
         const run: *volatile kvm.struct_kvm_run = @ptrFromInt(run_ptr);
 
+        var line_buf: []u8 = try self.allocator.alloc(u8, 256);
+        defer self.allocator.free(line_buf);
+        var line_len: usize = 0;
+
         while (true) {
             _ = try ioctl(@intCast(vcpuFd), kvm.KVM_RUN, 0);
 
             switch (run.exit_reason) {
                 kvm.KVM_EXIT_HLT => {
-                    std.debug.print("Guest executed HLT\n", .{});
+                    std.debug.print("[host] Guest HLT\n", .{});
                     break;
                 },
                 kvm.KVM_EXIT_IO => {
                     const io = run.unnamed_0.io;
-                    if (io.direction == kvm.KVM_EXIT_IO_OUT and io.port == 0xE9 and io.size == 1) {
+                    if (io.direction == kvm.KVM_EXIT_IO_OUT and io.size == 1) {
                         const data_ptr: [*]u8 = @ptrFromInt(@intFromPtr(run) + io.data_offset);
                         const ch = data_ptr[0];
-                        std.debug.print("Guest wrote to 0xE9: '{c}'\n", .{ch});
-                        // try ring.enqueue(ch);
+
+                        if (line_len < line_buf.len) {
+                            line_buf[line_len] = ch;
+                            line_len += 1;
+                        }
+
+                        if (ch == 0 or ch == 10) {
+                            const print_len = if (line_len > 0 and line_buf[line_len - 1] == 0) line_len - 1 else line_len;
+                            std.debug.print("[guest] {s}\n", .{line_buf[0..print_len]});
+                            line_len = 0;
+                        }
                     } else {
                         std.debug.print("Unhandled IO: port={x}, dir={}, size={}\n", .{ io.port, io.direction, io.size });
                     }

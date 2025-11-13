@@ -34,14 +34,14 @@ pub fn main() !void {
     const vcpuFd = try vm.createVcpu(0);
     std.debug.print("Created VCPU with fd: {d}\n", .{vcpuFd});
 
-    const buf = try vm.allocateAndRegister(0, 0x1000, 1024 * 1024);
+    const buf = try vm.allocateAndRegister(0, 0, 1024 * 1024);
     std.debug.print("Allocated and registered memory at address: 0x{x}, size : {}\n", .{ @intFromPtr(buf.ptr), buf.len });
 
     // Write a single HLT instruction at guest physical 0x1000
     buf[0] = 0xF4; // HLT opcode
 
     // Setup registers and segment state for the vCPU
-    try vm.setupState(vcpuFd, 0x1000, 0x2000);
+    try vm.setupState(vcpuFd, 0, 0x2000);
 
     // Run the vCPU (ioctl/mmap encapsulated by Vm.runVcpu)
     const reason = try vm.runVcpu(&k, vcpuFd);
@@ -52,10 +52,10 @@ pub fn main() !void {
         std.debug.print("vCPU exited with reason: {d}\n", .{reason});
     }
 
-    const loaded = try loadGuestBinary(buf, "guest.bin");
+    const loaded = try loadGuestBinary(buf, "../guest/guest.bin");
     std.debug.print("Loaded guest binary of size: {d} bytes\n", .{loaded});
 
-    try vm.setupState(vcpuFd, 0x1000, 0x2000);
+    try vm.setupState(vcpuFd, 0, 0x2000);
     // Run the vCPU (ioctl/mmap encapsulated by Vm.runVcpu)
     const reason2 = try vm.runVcpu(&k, vcpuFd);
     std.debug.print("Second vCPU run exited with reason: {d}\n", .{reason2});

@@ -27,6 +27,7 @@ Design summary
 Current status
 - Minimal HLT flow implemented: allocate guest memory, write `0xF4` (HLT),
   set regs/sregs, mmap the `kvm_run` area, call `KVM_RUN` and check exit reason.
+- Print a null-terminated string within assembly code. See `guest/guest.s`
 - IOCTL and mmap logic has been iteratively refactored into methods on `Kvm`
   and `Vm` so `main.zig` remains a short, readable example.
 - Some compatibility adjustments were made for different Zig stdlib/toolchain
@@ -52,12 +53,26 @@ zig build
 3. Run:
 
 ```bash
-bash scripts/build_guest.sh
+cd guest
+bash ../scripts/build_guest.sh
 zig build run
 ```
 
-You should see debug prints including the KVM API version and whether the
-vCPU exited with `KVM_EXIT_HLT`.
+Example output:
+```
+Created KVM fd: 3 VM fd: 4
+Created VCPU with fd: 5
+Allocated and registered memory at address: 0x7e3da8cf4000, size : 1048576
+[host] Guest HLT
+vCPU exited with HLT (reason=5) - success
+Loaded guest binary of size: 48 bytes
+[guest] Hello, host!
+
+[guest] This is the guest.
+
+[host] Guest HLT
+Second vCPU run exited with reason: 5
+```
 
 Notes, caveats and next steps
 - This project uses a simple fixed-size arrays for vCPU and owned-slice
