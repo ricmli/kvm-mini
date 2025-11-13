@@ -1,6 +1,18 @@
 const std = @import("std");
 const kvm_mini = @import("kvm_mini");
 
+fn loadGuestBinary(guest_buf: []u8, path: []const u8) !usize {
+    var file = try std.fs.cwd().openFile(path, .{});
+    defer file.close();
+
+    const n = try file.read(guest_buf);
+    if (n == 0) {
+        return error.EmptyFile;
+    }
+
+    return n;
+}
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
@@ -39,6 +51,14 @@ pub fn main() !void {
     } else {
         std.debug.print("vCPU exited with reason: {d}\n", .{reason});
     }
+
+    const loaded = try loadGuestBinary(buf, "guest.bin");
+    std.debug.print("Loaded guest binary of size: {d} bytes\n", .{loaded});
+
+    try vm.setupState(vcpuFd, 0x1000, 0x2000);
+    // Run the vCPU (ioctl/mmap encapsulated by Vm.runVcpu)
+    const reason2 = try vm.runVcpu(&k, vcpuFd);
+    std.debug.print("Second vCPU run exited with reason: {d}\n", .{reason2});
 
     // vm.close() will close vcpus and vm fds; k.close() will close the /dev/kvm fd
 }

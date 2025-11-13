@@ -13,3 +13,4 @@ tmp-debug-build/
 # Object files, temporary files
 *.o
 *~
+*.bin

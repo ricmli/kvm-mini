@@ -45,12 +45,14 @@ How to build and run (local Linux with KVM enabled)
 ```bash
 cd /path/to/kvm-mini
 bash scripts/gen_kvm_bindings.sh
+
 zig build
 ```
 
 3. Run:
 
 ```bash
+bash scripts/build_guest.sh
 zig build run
 ```
 

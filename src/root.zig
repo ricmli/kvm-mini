@@ -11,7 +11,7 @@ pub const Error = error{
     AddRegionFailed,
 };
 
-pub fn ioctl(fd: i32, request: u32, arg: usize) !usize {
+fn ioctl(fd: i32, request: u32, arg: usize) !usize {
     const ret = os.ioctl(fd, request, arg);
     if (@as(isize, @bitCast(ret)) < 0) {
         return Error.IoctlFailed;
@@ -109,7 +109,6 @@ pub const Vm = struct {
 
     pub fn runVcpu(_: *Vm, k: *Kvm, vcpuFd: u32) !u32 {
         const mmap_size = try k.getVcpuMmapSize();
-
         const run_ptr = os.mmap(null, mmap_size, os.PROT.READ | os.PROT.WRITE, .{ .TYPE = .SHARED }, @intCast(vcpuFd), 0);
         if (run_ptr == @intFromPtr(std.c.MAP_FAILED)) {
             return Error.IoctlFailed;
@@ -117,11 +116,33 @@ pub const Vm = struct {
         defer _ = os.munmap(@ptrFromInt(run_ptr), mmap_size);
         const run: *volatile kvm.struct_kvm_run = @ptrFromInt(run_ptr);
 
-        _ = try ioctl(@intCast(vcpuFd), kvm.KVM_RUN, 0);
+        while (true) {
+            _ = try ioctl(@intCast(vcpuFd), kvm.KVM_RUN, 0);
 
-        const reason = run.exit_reason;
+            switch (run.exit_reason) {
+                kvm.KVM_EXIT_HLT => {
+                    std.debug.print("Guest executed HLT\n", .{});
+                    break;
+                },
+                kvm.KVM_EXIT_IO => {
+                    const io = run.unnamed_0.io;
+                    if (io.direction == kvm.KVM_EXIT_IO_OUT and io.port == 0xE9 and io.size == 1) {
+                        const data_ptr: [*]u8 = @ptrFromInt(@intFromPtr(run) + io.data_offset);
+                        const ch = data_ptr[0];
+                        std.debug.print("Guest wrote to 0xE9: '{c}'\n", .{ch});
+                        // try ring.enqueue(ch);
+                    } else {
+                        std.debug.print("Unhandled IO: port={x}, dir={}, size={}\n", .{ io.port, io.direction, io.size });
+                    }
+                },
+                else => {
+                    std.debug.print("Unhandled exit_reason={}.\n", .{run.exit_reason});
+                    break;
+                },
+            }
+        }
 
-        return @intCast(reason);
+        return @intCast(run.exit_reason);
     }
 };
 
